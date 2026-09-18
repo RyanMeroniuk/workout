@@ -179,14 +179,22 @@ workout/
    │  ├─ EditWorkout.tsx
    │  ├─ ExerciseLibrary.tsx
    │  ├─ History.tsx
-   │  └─ Settings.tsx
+   │  ├─ SessionDetail.tsx    # view / edit one past session
+   │  ├─ Settings.tsx
+   │  └─ NotFound.tsx
    ├─ components/
-   │  ├─ SetRow.tsx           # weight × reps + done tap target
+   │  ├─ Shell.tsx            # Header, TabBar, Screen padding
    │  ├─ LineChart.tsx        # hand-rolled SVG, no chart library
-   │  ├─ ExercisePicker.tsx   # bottom sheet, pool first + "all exercises"
-   │  └─ Confirm.tsx
+   │  ├─ ExercisePicker.tsx   # pool first + "all exercises" expander
+   │  ├─ Sheet.tsx            # bottom sheet
+   │  ├─ Confirm.tsx
+   │  └─ Icons.tsx
    └─ styles/global.css       # dark theme tokens, safe-area insets
 ```
+
+*(Built as planned. Set rows ended up inline in `LogExercise`/`SessionDetail` rather than
+a shared `SetRow.tsx` — the two uses differ enough that a shared component would have been
+all props and no savings.)*
 
 ---
 
