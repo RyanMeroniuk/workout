@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import * as repo from '../db/repo'
 import { requestPersistence } from '../db/db'
+import { runPendingMigrations } from '../db/migrations'
 import type { Exercise, ID, LoggedExercise, Session, SetEntry, Workout } from '../db/types'
 
 export interface State {
@@ -74,7 +75,14 @@ let bootPromise: Promise<void> | null = null
 export function boot(): Promise<void> {
   if (!bootPromise) {
     bootPromise = (async () => {
-      await repo.seedIfEmpty()
+      try {
+        await runPendingMigrations()
+      } catch (err) {
+        // Never let a cleanup failure brick startup: an uncaught throw here rejects
+        // boot(), and main.tsx would render the "can't open storage" screen — which
+        // would be a lie. The flag stays unwritten, so it simply retries next launch.
+        console.error('[slots] migration failed, will retry next launch', err)
+      }
       const snap = await repo.loadAll()
       set({
         ready: true,
@@ -88,9 +96,13 @@ export function boot(): Promise<void> {
   return bootPromise
 }
 
-/** Re-read everything from disk. Used after import / wipe. */
+/**
+ * Re-read everything from disk. Used after import / wipe.
+ *
+ * Deliberately runs no migrations: this is called immediately after importAll, and a
+ * cleanup here would delete data the user just deliberately restored.
+ */
 export async function reload(): Promise<void> {
-  await repo.seedIfEmpty()
   const snap = await repo.loadAll()
   set({
     ready: true,
@@ -102,10 +114,29 @@ export async function reload(): Promise<void> {
 
 // ---------- exercises ----------
 
-export function createExercise(name: string, equipment: Exercise['equipment']): Exercise {
-  const ex: Exercise = { id: repo.uid(), name: name.trim(), equipment, createdAt: Date.now() }
+export function createExercise(name: string): Exercise {
+  const ex: Exercise = { id: repo.uid(), name: name.trim(), createdAt: Date.now() }
   set({ exercises: [...state.exercises, ex] }, () => repo.putExercise(ex))
   return ex
+}
+
+/**
+ * Returns the existing exercise with this name, or creates one.
+ *
+ * Names are free text typed mid-workout, so this guard is what stops "Lat pulldown"
+ * and "lat pulldown" becoming two records — which would silently fork the history
+ * that the entire app is built around. Every creation path goes through here.
+ */
+export function createOrReuseExercise(name: string): Exercise {
+  const key = name.trim().toLowerCase()
+  const existing = state.exercises.find((e) => e.name.trim().toLowerCase() === key)
+  return existing ?? createExercise(name)
+}
+
+/** Case-insensitive lookup used to decide whether to offer "Create <name>". */
+export function findExerciseByName(name: string): Exercise | undefined {
+  const key = name.trim().toLowerCase()
+  return state.exercises.find((e) => e.name.trim().toLowerCase() === key)
 }
 
 export function updateExercise(id: ID, patch: Partial<Omit<Exercise, 'id'>>) {

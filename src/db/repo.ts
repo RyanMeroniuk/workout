@@ -1,8 +1,15 @@
 import { getDB } from './db'
-import { buildSeedData } from './seed'
 import type { Exercise, ExportBundle, ID, Session, Workout } from './types'
 
-export const EXPORT_VERSION = 1
+/**
+ * Backup format version.
+ *   v1 — Exercise had an `equipment` field.
+ *   v2 — `equipment` removed; weight is always lb. Exercise is { id, name, createdAt }.
+ *
+ * v1 files still import: parseBundle only rejects versions NEWER than this one, and
+ * normalizeExercise strips the dead field on the way in.
+ */
+export const EXPORT_VERSION = 2
 
 export function uid(): ID {
   if (crypto.randomUUID) return crypto.randomUUID()
@@ -33,19 +40,6 @@ export async function loadAll(): Promise<Snapshot> {
   ])
   await tx.done
   return { exercises, workouts, sessions }
-}
-
-export async function seedIfEmpty(): Promise<boolean> {
-  const db = await getDB()
-  const count = await db.count('workouts')
-  if (count > 0) return false
-
-  const { exercises, workouts } = buildSeedData()
-  const tx = db.transaction(['exercises', 'workouts'], 'readwrite')
-  for (const e of exercises) void tx.objectStore('exercises').put(e)
-  for (const w of workouts) void tx.objectStore('workouts').put(w)
-  await tx.done
-  return true
 }
 
 // ---------- writes ----------
@@ -115,10 +109,26 @@ export function parseBundle(text: string): ExportBundle {
   if (typeof b.version !== 'number' || b.version > EXPORT_VERSION) {
     throw new Error('That backup was made by a newer version of Slots.')
   }
+  if (b.version < 1) throw new Error('That backup is from an unsupported version.')
   if (!Array.isArray(b.exercises) || !Array.isArray(b.workouts) || !Array.isArray(b.sessions)) {
     throw new Error('That backup is missing data.')
   }
   return b as ExportBundle
+}
+
+/**
+ * Projects an imported exercise onto exactly the current shape.
+ *
+ * A v1 backup carries a dead `equipment` field. Stripping it here rather than storing
+ * it verbatim keeps the database honest — otherwise the field would live on forever
+ * and get re-exported inside a file labelled v2.
+ */
+function normalizeExercise(raw: Exercise): Exercise {
+  return {
+    id: raw.id,
+    name: String(raw.name ?? 'Unnamed'),
+    createdAt: Number(raw.createdAt) || Date.now(),
+  }
 }
 
 /** Replaces everything. Destructive by design — the Settings screen confirms first. */
@@ -130,23 +140,29 @@ export async function importAll(bundle: ExportBundle): Promise<void> {
     tx.objectStore('workouts').clear(),
     tx.objectStore('sessions').clear(),
   ])
-  for (const e of bundle.exercises) void tx.objectStore('exercises').put(e)
-  for (const w of bundle.workouts) void tx.objectStore('workouts').put(w)
+  for (const e of bundle.exercises) void tx.objectStore('exercises').put(normalizeExercise(e))
+  for (const w of bundle.workouts) {
+    void tx.objectStore('workouts').put({ ...w, slots: w.slots ?? [] })
+  }
   for (const s of bundle.sessions) {
     // Older/hand-edited backups may lack the denormalized field; rebuild it.
-    void tx.objectStore('sessions').put(withExerciseIds(s))
+    void tx.objectStore('sessions').put(withExerciseIds({ ...s, skippedSlotIds: s.skippedSlotIds ?? [] }))
   }
   await tx.done
 }
 
+/**
+ * Deletes all user data. Deliberately does NOT clear `meta`: that store holds the
+ * one-time migration flags, and clearing it would re-arm the seed cleanup, which
+ * would then delete seeded content restored from a backup on the next launch.
+ */
 export async function wipeAll(): Promise<void> {
   const db = await getDB()
-  const tx = db.transaction(['exercises', 'workouts', 'sessions', 'meta'], 'readwrite')
+  const tx = db.transaction(['exercises', 'workouts', 'sessions'], 'readwrite')
   await Promise.all([
     tx.objectStore('exercises').clear(),
     tx.objectStore('workouts').clear(),
     tx.objectStore('sessions').clear(),
-    tx.objectStore('meta').clear(),
   ])
   await tx.done
 }

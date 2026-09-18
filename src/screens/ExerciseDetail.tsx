@@ -12,8 +12,6 @@ import {
   seriesFor,
   slotsContaining,
   totalVolume,
-  weightHint,
-  weightLabel,
   type Metric,
 } from '../store/selectors'
 import { useStore } from '../store/store'
@@ -37,24 +35,18 @@ export function ExerciseDetail({ exerciseId }: { exerciseId: string }) {
   const series = seriesFor(state, exerciseId, metric)
   const slots = slotsContaining(state, exerciseId)
   const unit = METRICS.find((m) => m.key === metric)!.unit
-  const hint = weightHint(exercise.equipment)
 
   return (
     <>
       <Header title={exercise.name} showBack />
       <Screen tabbar>
-        <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-          <span className="chip">{exercise.equipment}</span>
-          <span className="chip">{weightLabel(exercise.equipment)}</span>
-          {slots.map((s, i) => (
-            <span className="chip" key={i}>
-              {s.workout.name} · {s.slotName}
-            </span>
-          ))}
-        </div>
-        {hint ? (
-          <div className="tiny faint" style={{ marginBottom: 12 }}>
-            {hint}
+        {slots.length > 0 ? (
+          <div className="row" style={{ flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+            {slots.map((s, i) => (
+              <span className="chip" key={i}>
+                {s.workout.name} · {s.slotName}
+              </span>
+            ))}
           </div>
         ) : null}
 

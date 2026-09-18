@@ -3,12 +3,11 @@ import { Confirm } from '../components/Confirm'
 import { IconChevronRight, IconPlus, IconSearch, IconTrash } from '../components/Icons'
 import { Header, Screen } from '../components/Shell'
 import { Sheet } from '../components/Sheet'
-import type { Equipment, Exercise } from '../db/types'
+import type { Exercise } from '../db/types'
 import { navigate } from '../router'
 import { fmtRelativeDate, historyFor, lastTimeFor, slotsContaining } from '../store/selectors'
 import * as store from '../store/store'
 import { useStore } from '../store/store'
-import { EquipmentPicker } from './EditWorkout'
 
 export function ExerciseLibrary() {
   const state = useStore()
@@ -59,7 +58,15 @@ export function ExerciseLibrary() {
           {list.length} exercise{list.length === 1 ? '' : 's'}
         </div>
 
-        {list.length === 0 ? (
+        {state.exercises.length === 0 ? (
+          <div className="empty">
+            No exercises yet.
+            <br />
+            <br />
+            The easiest way to add them is during a workout — tap a slot and type a
+            name. It gets saved to that slot for next time.
+          </div>
+        ) : list.length === 0 ? (
           <div className="empty">No matches.</div>
         ) : (
           <div className="stack-sm">
@@ -76,8 +83,7 @@ export function ExerciseLibrary() {
                     >
                       <strong className="truncate">{e.name}</strong>
                       <span className="small faint">
-                        {e.equipment}
-                        {last ? ` · last ${fmtRelativeDate(last.date)}` : ' · no history'}
+                        {last ? `Last ${fmtRelativeDate(last.date)}` : 'No history yet'}
                       </span>
                     </button>
                     <button
@@ -116,11 +122,10 @@ export function ExerciseLibrary() {
 
 function CreateExercise({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('')
-  const [equipment, setEquipment] = useState<Equipment>('dumbbell')
 
   function create() {
     if (!name.trim()) return
-    const ex = store.createExercise(name, equipment)
+    const ex = store.createOrReuseExercise(name)
     onClose()
     navigate(`/exercise/${ex.id}`)
   }
@@ -137,11 +142,6 @@ function CreateExercise({ onClose }: { onClose: () => void }) {
           onKeyDown={(e) => e.key === 'Enter' && create()}
           autoFocus
         />
-        <EquipmentPicker value={equipment} onChange={setEquipment} />
-        <div className="tiny faint">
-          Equipment only changes the weight label — dumbbells read "per hand",
-          bodyweight reads "added lb".
-        </div>
         <button className="btn primary block lg" disabled={!name.trim()} onClick={create}>
           Create
         </button>
@@ -167,11 +167,6 @@ function EditExercise({ exercise, onClose }: { exercise: Exercise; onClose: () =
             placeholder="Exercise name"
             enterKeyHint="done"
           />
-          <EquipmentPicker
-            value={exercise.equipment}
-            onChange={(eq) => store.updateExercise(exercise.id, { equipment: eq })}
-          />
-
           <button
             className="btn block"
             onClick={() => {

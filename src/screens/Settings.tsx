@@ -63,9 +63,9 @@ export function Settings() {
 
   async function doWipe() {
     await repo.wipeAll()
-    await reload() // reseeds the default program, so you're never left with nothing
+    await reload()
     setConfirmWipe(false)
-    setStatus({ kind: 'ok', text: 'All data erased and the default program restored.' })
+    setStatus({ kind: 'ok', text: 'All data erased.' })
   }
 
   return (
@@ -136,7 +136,7 @@ export function Settings() {
         </button>
 
         <div className="tiny faint center" style={{ marginTop: 24 }}>
-          Slots · offline-first · v{repo.EXPORT_VERSION}
+          Slots · offline-first
         </div>
       </Screen>
 
@@ -154,7 +154,7 @@ export function Settings() {
       {confirmWipe ? (
         <Confirm
           title="Erase everything?"
-          message="All workouts, exercises and logged sessions are deleted from this device and the default program is restored. Export a backup first if you might want this back."
+          message="All workouts, exercises and logged sessions are deleted from this device, leaving the app empty. Export a backup first if you might want this back."
           confirmLabel="Erase everything"
           destructive
           onConfirm={() => void doWipe()}

@@ -197,15 +197,3 @@ function startOfDay(ts: number): number {
   return d.getTime()
 }
 
-/** The UI label for the weight field, which depends on equipment. */
-export function weightLabel(equipment: Exercise['equipment']): string {
-  if (equipment === 'dumbbell') return 'lb per hand'
-  if (equipment === 'bodyweight') return 'added lb'
-  return 'lb'
-}
-
-export function weightHint(equipment: Exercise['equipment']): string | null {
-  if (equipment === 'dumbbell') return 'Per hand — 50 means two 50 lb dumbbells'
-  if (equipment === 'bodyweight') return '0 = bodyweight only'
-  return null
-}

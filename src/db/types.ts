@@ -1,16 +1,15 @@
 export type ID = string
 
-export type Equipment = 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'bodyweight'
-
 /**
  * An exercise is GLOBAL — it lives in one catalogue and is referenced by id from
  * any number of slot pools. That is what makes history shared: doing "Dumbbell RDL"
  * in the Hamstrings slot and in a Posterior-chain slot writes to the same record.
+ *
+ * Just a name. Exercises are created by you, as you train.
  */
 export interface Exercise {
   id: ID
   name: string
-  equipment: Equipment
   createdAt: number
 }
 
@@ -34,8 +33,7 @@ export interface Workout {
 
 export interface SetEntry {
   id: ID
-  /** Pounds. Decimals allowed (2.5 increments). For dumbbells this is PER HAND.
-   *  For bodyweight movements it is ADDED weight, where 0 means bodyweight only. */
+  /** Pounds. Decimals allowed (2.5 increments). */
   weight: number
   reps: number
   done: boolean

@@ -10,7 +10,7 @@ import {
 } from '../components/Icons'
 import { Header, Screen } from '../components/Shell'
 import { Sheet } from '../components/Sheet'
-import type { Equipment, ID, Slot } from '../db/types'
+import type { ID, Slot } from '../db/types'
 import { navigate } from '../router'
 import { exerciseById, workoutById } from '../store/selectors'
 import * as store from '../store/store'
@@ -219,7 +219,6 @@ function PoolEditor({
   const state = useStore()
   const [query, setQuery] = useState('')
   const [newName, setNewName] = useState('')
-  const [newEquip, setNewEquip] = useState<Equipment>('dumbbell')
 
   const inPool = slot.exerciseIds
   const candidates = useMemo(() => {
@@ -250,8 +249,8 @@ function PoolEditor({
   function createAndAdd() {
     const name = newName.trim()
     if (!name) return
-    const ex = store.createExercise(name, newEquip)
-    store.setSlotPool(workoutId, slot.id, [...inPool, ex.id])
+    const ex = store.createOrReuseExercise(name)
+    if (!inPool.includes(ex.id)) store.setSlotPool(workoutId, slot.id, [...inPool, ex.id])
     setNewName('')
   }
 
@@ -320,7 +319,6 @@ function PoolEditor({
             <span className="grow truncate" style={{ textAlign: 'left' }}>
               {e.name}
             </span>
-            <span className="chip">{e.equipment}</span>
             <span className="icon-btn">
               <IconPlus />
             </span>
@@ -343,37 +341,11 @@ function PoolEditor({
           enterKeyHint="done"
           onKeyDown={(e) => e.key === 'Enter' && createAndAdd()}
         />
-        <EquipmentPicker value={newEquip} onChange={setNewEquip} />
         <button className="btn primary block" disabled={!newName.trim()} onClick={createAndAdd}>
           <IconCheck className="icon-sm" />
           Create and add
         </button>
       </div>
     </Sheet>
-  )
-}
-
-export const EQUIPMENT: Equipment[] = ['barbell', 'dumbbell', 'cable', 'machine', 'bodyweight']
-
-export function EquipmentPicker({
-  value,
-  onChange,
-}: {
-  value: Equipment
-  onChange: (e: Equipment) => void
-}) {
-  return (
-    <div className="row" style={{ flexWrap: 'wrap', gap: 6 }}>
-      {EQUIPMENT.map((eq) => (
-        <button
-          key={eq}
-          className={`chip${value === eq ? ' accent' : ''}`}
-          style={{ minHeight: 36, padding: '0 12px' }}
-          onClick={() => onChange(eq)}
-        >
-          {eq}
-        </button>
-      ))}
-    </div>
   )
 }

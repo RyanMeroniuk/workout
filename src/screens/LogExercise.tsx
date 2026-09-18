@@ -13,8 +13,6 @@ import {
   prefillReps,
   prefillWeight,
   sessionById,
-  weightHint,
-  weightLabel,
   workoutById,
 } from '../store/selectors'
 import * as store from '../store/store'
@@ -47,10 +45,31 @@ export function LogExercise({ sessionId, slotId }: { sessionId: string; slotId: 
   if (!session || !slot) return <NotFound />
 
   const slotName = slot.name
+  const slotPool = slot.exerciseIds
+  const workoutId = session.workoutId
+
   function pick(exerciseId: ID) {
     store.ensureEntry(sessionId, slotId, slotName, exerciseId)
     setSelectedId(exerciseId)
     setPicking(false)
+  }
+
+  /**
+   * Create an exercise mid-workout and start logging it immediately.
+   *
+   * It joins the slot's pool permanently — you typed it while standing in front of the
+   * machine, so you'll want it there next time.
+   *
+   * No awaits: store mutations update memory synchronously before queueing the write,
+   * and the write queue is serialized, so the exercise row commits before the workout
+   * row that references it. No dangling reference on disk even if the app dies here.
+   */
+  function createAndPick(name: string) {
+    const ex = store.createOrReuseExercise(name)
+    if (!slotPool.includes(ex.id)) {
+      store.setSlotPool(workoutId, slotId, [...slotPool, ex.id])
+    }
+    pick(ex.id)
   }
 
   return (
@@ -61,7 +80,11 @@ export function LogExercise({ sessionId, slotId }: { sessionId: string; slotId: 
         onBack={() => navigate(`/session/${sessionId}`)}
         right={
           selectedId ? (
-            <button className="header-btn" onClick={() => setPicking(true)}>
+            <button
+              className="header-btn"
+              onClick={() => setPicking(true)}
+              aria-label="Swap exercise"
+            >
               <IconSwap />
             </button>
           ) : null
@@ -71,13 +94,16 @@ export function LogExercise({ sessionId, slotId }: { sessionId: string; slotId: 
       <Screen>
         {selectedId ? (
           <Logger
+            // Remount on swap so the inputs re-seed from the new exercise's history
+            // rather than carrying over the previous one's numbers.
+            key={selectedId}
             sessionId={sessionId}
             slotId={slotId}
             exerciseId={selectedId}
             onSwap={() => setPicking(true)}
           />
         ) : (
-          <ExercisePicker poolIds={slot.exerciseIds} onPick={pick} />
+          <ExercisePicker poolIds={slot.exerciseIds} onPick={pick} onCreate={createAndPick} />
         )}
 
         {/* Other exercises already logged in this slot (e.g. you did two movements). */}
@@ -115,7 +141,12 @@ export function LogExercise({ sessionId, slotId }: { sessionId: string; slotId: 
           subtitle="Pick whatever's free — history follows the exercise, not the slot."
           onClose={() => setPicking(false)}
         >
-          <ExercisePicker poolIds={slot.exerciseIds} selectedId={selectedId} onPick={pick} />
+          <ExercisePicker
+            poolIds={slot.exerciseIds}
+            selectedId={selectedId}
+            onPick={pick}
+            onCreate={createAndPick}
+          />
         </Sheet>
       ) : null}
     </>
@@ -139,21 +170,28 @@ function Logger({
   const exercise = exerciseById(state, exerciseId)
   const last = lastTimeFor(state, exerciseId)
 
-  const [weight, setWeight] = useState('')
-  const [reps, setReps] = useState('')
+  // Seeded during the first render, not in an effect — an effect would paint an empty
+  // field for a frame before filling it, which looks broken when you're glancing at
+  // the phone between sets.
+  const [weight, setWeight] = useState(() => {
+    const w = prefillWeight(state, exerciseId, entry)
+    return w === '' ? '' : fmtWeight(w)
+  })
+  const [reps, setReps] = useState(() => {
+    const r = prefillReps(entry)
+    return r === '' ? '' : String(r)
+  })
 
-  // Re-seed the inputs whenever the last logged set changes: straight sets are the
-  // norm, so the next set almost always starts from the previous one's numbers.
+  // Re-seed whenever a set is appended: straight sets are the norm, so the next set
+  // almost always starts from the previous one's numbers. Deps are deliberately narrow
+  // — re-running on every unrelated store update would stomp on what you're typing.
   const lastSetId = entry?.sets.at(-1)?.id
   useEffect(() => {
     const w = prefillWeight(state, exerciseId, entry)
     const r = prefillReps(entry)
     setWeight(w === '' ? '' : fmtWeight(w))
     setReps(r === '' ? '' : String(r))
-    // Intentionally narrow deps: re-seed only when the exercise changes or a set
-    // is appended — not on every unrelated store update, which would stomp on
-    // what you're mid-way through typing.
-  }, [exerciseId, lastSetId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lastSetId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!exercise || !session) return null
 
@@ -171,14 +209,12 @@ function Logger({
     store.addSet(sessionId, slotId, exerciseId, wNum, rNum)
   }
 
-  const hint = weightHint(exercise.equipment)
-
   return (
     <div className="stack">
       <div className="row between">
         <button className="col grow" style={{ textAlign: 'left' }} onClick={onSwap}>
           <strong style={{ fontSize: 19 }}>{exercise.name}</strong>
-          <span className="small muted">Tap to swap · {exercise.equipment}</span>
+          <span className="small muted">Tap to swap</span>
         </button>
         <button
           className="btn sm ghost"
@@ -250,7 +286,7 @@ function Logger({
         <div className="row" style={{ gap: 10, alignItems: 'flex-end' }}>
           <div className="col grow">
             <label className="tiny faint" htmlFor="w">
-              {weightLabel(exercise.equipment).toUpperCase()}
+              LB
             </label>
             <div className="row" style={{ gap: 6 }}>
               <button className="icon-btn" onClick={() => bump(-STEP)} aria-label="Less weight">
@@ -287,8 +323,6 @@ function Logger({
             />
           </div>
         </div>
-
-        {hint ? <div className="tiny faint">{hint}</div> : null}
 
         <button className="btn primary block lg" onClick={add} disabled={!canAdd}>
           <IconPlus className="icon-sm" />
