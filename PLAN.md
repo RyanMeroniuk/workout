@@ -30,14 +30,9 @@ type ID = string // crypto.randomUUID()
 // ---------- Global exercise catalogue ----------
 interface Exercise {
   id: ID
-  name: string                  // "Incline dumbbell press"
-  equipment: Equipment          // drives the weight label in the UI
+  name: string                  // "Incline dumbbell press" — just a name
   createdAt: number
 }
-
-type Equipment = 'barbell' | 'dumbbell' | 'cable' | 'machine' | 'bodyweight'
-// dumbbell   → weight label "lb per hand"
-// bodyweight → weight label "added lb (0 = bodyweight)"
 
 // ---------- Workout structure ----------
 interface Slot {
@@ -108,7 +103,7 @@ every session write, so it can't drift.
 | `exercises` | `id`    | `by-name`                                          |
 | `workouts`  | `id`    | `by-order`                                         |
 | `sessions`  | `id`    | `by-startedAt`, `by-exercise` (multiEntry on `exerciseIds`) |
-| `meta`      | `key`   | — (schema version, seed flag, last-used weights)   |
+| `meta`      | `key`   | — one-time migration flags (e.g. the seed cleanup) |
 
 ### Read strategy — no spinners, ever
 On boot, load **all** data into an in-memory store in one transaction. A year of
@@ -167,7 +162,7 @@ workout/
    │  ├─ types.ts             # the interfaces above
    │  ├─ db.ts                # openDB + schema/migrations
    │  ├─ repo.ts              # CRUD + export/import
-   │  └─ seed.ts              # your Upper / Full Body program
+   │  └─ migrations.ts        # one-time seed cleanup, flagged in `meta`
    ├─ store/
    │  ├─ store.ts             # in-memory state, useSyncExternalStore
    │  └─ selectors.ts         # lastSessionFor(), historySeries(), e1RM
@@ -243,44 +238,24 @@ One-command redeploy: `npm run deploy` → `git push origin main`.
 
 ---
 
-## 8. Seed data — your program
+## 8. Starting state — empty by design
 
-Exercises are seeded once into the global catalogue, then referenced by slots. Note
-**Side delts, Biceps, Triceps** deliberately point at the *same* exercise records in
-both workouts, so history is continuous across Upper and Full Body days.
+**Superseded.** This section originally specified a seeded Upper / Full Body program.
+That was removed: the app now starts with zero workouts and zero exercises, and you
+author everything yourself.
 
-**Upper** — 9 slots
-| Slot | Pool |
-|---|---|
-| Upper chest | Incline barbell bench · Incline dumbbell press · Incline machine press · Low-to-high cable fly |
-| Mid chest | Flat barbell bench · Flat dumbbell press · Machine chest press · Cable fly · Dips |
-| Lats | Lat pulldown · Neutral-grip cable pulldown · Dumbbell row · Pull-ups · Machine pullover |
-| Upper back | Chest-supported row · Seated cable row · Barbell row · T-bar row |
-| Front delts | Overhead barbell press · Seated dumbbell press · Machine shoulder press |
-| Side delts | Dumbbell lateral raise · Cable lateral raise · Machine lateral raise |
-| Rear delts | Reverse pec deck · Cable reverse fly · Dumbbell rear delt fly · Face pull |
-| Biceps | Barbell curl · Dumbbell curl · Incline dumbbell curl · Cable curl · Preacher curl |
-| Triceps | Cable pushdown · Overhead cable extension · Skull crusher · Dips |
-
-**Full Body** — 7 slots
-| Slot | Pool |
-|---|---|
-| Chest | Flat dumbbell press · Machine chest press · Flat barbell bench · Incline dumbbell press |
-| Back | Lat pulldown · Seated cable row · Dumbbell row · Pull-ups |
-| Side delts | *(shared pool with Upper)* |
-| Biceps | *(shared pool with Upper)* |
-| Triceps | *(shared pool with Upper)* |
-| Quads | Barbell squat · Leg press · Hack squat · Goblet squat · Leg extension |
-| Hamstrings | Romanian deadlift · Dumbbell RDL · Seated leg curl · Lying leg curl |
-
-Every exercise is tagged with equipment, which drives its weight label:
-`dumbbell` → "lb per hand", `bodyweight` (Pull-ups, Dips) → "added lb, 0 = bodyweight".
+- A one-time migration (`src/db/migrations.ts`) deletes the old seeded content from any
+  device that already had it, keeping any seeded exercise you'd logged a set against so
+  no history is orphaned. It records a flag in the `meta` store so it runs exactly once.
+- The exercise library is built during training: tap a slot, type a name, and the
+  exercise is created and added to that slot's pool. Creation is de-duplicated
+  case-insensitively so one exercise can't fork into two timelines.
 
 ---
 
 ## 9. Build order
 
-1. **Scaffold + data layer** — Vite/TS, types, `db.ts`, `repo.ts`, `seed.ts`, store.
+1. **Scaffold + data layer** — Vite/TS, types, `db.ts`, `repo.ts`, store.
 2. **Core loop end-to-end** — Home → Start → slot list → pick exercise → log sets → Finish.
    Nothing else until this works on a phone-sized viewport.
 3. **Exercise detail** — "last time" block, SVG graph w/ 3 toggles, full history.
@@ -293,8 +268,7 @@ Every exercise is tagged with equipment, which drives its weight label:
 
 ## 10. Assumptions I'm keeping (flag any you want changed)
 
-- Dumbbell = per hand, labelled in the UI.
-- Bodyweight = added weight, 0 = bodyweight.
+- An exercise is just a name; no equipment field. Weight is always labelled `lb`.
 - Working sets only; no warm-up flag.
 - No rest timer, no RPE, no notes, no streaks.
 - One workout in progress at a time; it survives an app close and resumes on Home.

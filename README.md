@@ -12,6 +12,10 @@ same exercise used in two different slots shares one record.
 
 Offline-first, local-only, no accounts, no network calls after first load.
 
+**It starts completely empty.** There's no built-in program — you create your workouts
+and name your own slots. The exercise library builds itself as you train: tap a slot, type
+a name, and it's created and saved into that slot for next time.
+
 ---
 
 ## Install it on your iPhone
@@ -105,16 +109,20 @@ npm run preview &
 npm run verify
 ```
 
-`npm run verify` drives a real Chromium at an iPhone viewport and checks 42 things,
+`npm run verify` drives a real Chromium at an iPhone viewport and checks 64 things,
 including the ones that are impossible to eyeball:
 
-- the full logging loop: start → pick exercise → log sets → finish
+- a virgin install writing **zero** rows — asserted against raw IndexedDB
+- the one-time seed cleanup, including the index-drift case (an exercise referenced only
+  via `entries[]` must survive) and that it never runs twice
+- authoring a workout, slots and exercises entirely through the UI
+- creating an exercise mid-session, and the case-insensitive duplicate guard
 - data surviving a hard reload, asserted against the **raw IndexedDB rows**, not just the UI
 - the `by-exercise` multiEntry index resolving
 - history following an exercise across two different slots
 - reordering slots and workouts, adding a slot, creating an exercise into a pool
-- the app booting **and logging a set with the network offline**
-- export → wipe → import round-trip
+- the app booting, logging a set **and creating an exercise with the network offline**
+- export → wipe → import round-trip, plus importing a legacy v1 backup
 
 ---
 
@@ -130,7 +138,9 @@ Session ──has many──> LoggedExercise ──────────┘
 ```
 
 - **Exercises are global.** Slots hold `exerciseId[]`, so the same exercise in two pools
-  is one record with one shared history.
+  is one record with one shared history. Creating one goes through a case-insensitive
+  name check — otherwise typing "Lat pulldown" twice would silently fork that history
+  into two identical-looking records.
 - **Slots are embedded in `Workout`.** A slot belongs to exactly one workout and is never
   queried on its own, so reordering is a single atomic `put()`.
 - **Sessions snapshot `workoutName` and `slotName`.** Renaming or deleting a workout later
@@ -164,8 +174,9 @@ Production bundle: **~86 kB gzipped**.
 ## Conventions
 
 - Weight is **pounds**. Decimals allowed; the ± buttons step by **2.5 lb**.
-- **Dumbbells are logged per hand** — `50` means two 50 lb dumbbells. The UI labels this.
-- **Bodyweight moves log added weight**, where `0` = bodyweight only.
+- An exercise is **just a name** — no equipment/category to fill in. Whatever convention
+  you use for dumbbells (per hand vs. total) is yours to keep consistent; the app only
+  ever compares an exercise against itself.
 - Working sets only; warm-ups aren't tracked.
 - One workout can be in progress at a time. It survives closing the app and resumes from Home.
 - No rest timer, no RPE, no notes, no streaks.
