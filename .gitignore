@@ -1,0 +1,19 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# vite-plugin-pwa build output
+dev-dist/
+
+# e2e failure artifacts
+e2e-failure.png
+
+# local tooling scratch
+.tldr/
+
+.DS_Store
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/
