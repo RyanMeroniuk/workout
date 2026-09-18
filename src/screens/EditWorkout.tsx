@@ -33,7 +33,9 @@ export function EditWorkout({ workoutId }: { workoutId: string }) {
 
   return (
     <>
-      <Header title="Edit workout" showBack onBack={() => navigate('/')} />
+      {/* Default back() rather than a hardcoded '/': you can reach this from Home OR
+          from inside a live workout, and the latter must return to the session. */}
+      <Header title="Edit workout" showBack />
       <Screen tabbar>
         <div className="section-label">Name</div>
         <input

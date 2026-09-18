@@ -100,20 +100,24 @@ export function Home() {
                     </span>
                   </div>
                   <button
-                    className="header-btn plain"
+                    className="header-btn"
                     onClick={() => navigate(`/workout/${w.id}/edit`)}
                     aria-label={`Edit ${w.name}`}
                   >
                     <IconEdit />
+                    Edit
                   </button>
                 </div>
+                {/* A workout with no slots used to show a DISABLED "Add slots first"
+                    button, which named the fix but gave you no way to do it. */}
                 <button
                   className="btn primary block lg"
                   style={{ marginTop: 12 }}
-                  onClick={() => start(w.id)}
-                  disabled={w.slots.length === 0}
+                  onClick={() =>
+                    w.slots.length === 0 ? navigate(`/workout/${w.id}/edit`) : start(w.id)
+                  }
                 >
-                  {w.slots.length === 0 ? 'Add slots first' : 'Start'}
+                  {w.slots.length === 0 ? 'Add slots' : 'Start'}
                 </button>
               </div>
             )

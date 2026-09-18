@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Confirm } from '../components/Confirm'
-import { IconCheck, IconChevronRight, IconSkip } from '../components/Icons'
+import { IconCheck, IconChevronRight, IconEdit, IconPlus, IconSkip } from '../components/Icons'
 import { Header, Screen } from '../components/Shell'
 import { navigate } from '../router'
 import {
@@ -21,6 +21,7 @@ export function ActiveSession({ sessionId }: { sessionId: string }) {
   const session = sessionById(state, sessionId)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [newSlotName, setNewSlotName] = useState('')
 
   /**
    * Following a link to an already-finished session should land on the read-only
@@ -43,6 +44,13 @@ export function ActiveSession({ sessionId }: { sessionId: string }) {
   const progress = sessionProgress(session, workout)
   const loggedAnything = session.entries.some((e) => e.sets.some((s) => s.done))
 
+  function addSlotNow() {
+    const name = newSlotName.trim()
+    if (!name) return
+    store.addSlot(session!.workoutId, name)
+    setNewSlotName('')
+  }
+
   return (
     <>
       <Header
@@ -50,8 +58,15 @@ export function ActiveSession({ sessionId }: { sessionId: string }) {
         showBack
         onBack={() => navigate('/')}
         right={
-          <button className="header-btn plain" onClick={() => setConfirmDiscard(true)}>
-            Discard
+          // Mid-workout edits are a real need: you turn up and do something that
+          // isn't in the plan. The session survives the trip — it's keyed by id in
+          // the store, not by what's on screen.
+          <button
+            className="header-btn"
+            onClick={() => navigate(`/workout/${session.workoutId}/edit`)}
+          >
+            <IconEdit />
+            Edit
           </button>
         }
       />
@@ -142,6 +157,33 @@ export function ActiveSession({ sessionId }: { sessionId: string }) {
             )
           })}
         </div>
+
+        {/* Doing something that isn't in the plan today — add the slot here and log
+            it now. It joins the workout for next time too. */}
+        <div className="row" style={{ gap: 8, marginTop: 14 }}>
+          <input
+            className="input grow"
+            placeholder="Add a slot, e.g. Calves"
+            value={newSlotName}
+            onChange={(e) => setNewSlotName(e.target.value)}
+            enterKeyHint="done"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') addSlotNow()
+            }}
+          />
+          <button className="btn" disabled={!newSlotName.trim()} onClick={addSlotNow}>
+            <IconPlus className="icon-sm" />
+            Add
+          </button>
+        </div>
+
+        <button
+          className="btn ghost block sm"
+          style={{ marginTop: 22, color: 'var(--danger)' }}
+          onClick={() => setConfirmDiscard(true)}
+        >
+          Discard this workout
+        </button>
       </Screen>
 
       <div className="footer-action">

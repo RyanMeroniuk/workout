@@ -137,11 +137,23 @@ h4 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   border-radius: var(--r-sm);
-  color: var(--accent);
+  /* White, not accent: header controls are navigation. Accent is reserved for the
+     one primary action on a screen (Start, Add set, Create). */
+  color: var(--text);
   font-size: 15px;
   font-weight: 600;
   padding: 0 8px;
+  flex-shrink: 0;
+}
+/* Explicit size is REQUIRED. These icons carry a viewBox but no width/height, and
+   an SVG with no intrinsic size inside a flex container is sized inconsistently —
+   Chromium stretches it to fill, Safari collapses it to zero and the button renders
+   invisible while still being tappable. */
+.header-btn svg {
+  width: 22px;
+  height: 22px;
   flex-shrink: 0;
 }
 .header-btn:active {

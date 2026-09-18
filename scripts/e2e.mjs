@@ -195,6 +195,17 @@ try {
 
   check('Home shows empty state', await visible(page.getByText('No workouts yet', { exact: false })))
 
+  // The empty state tells you to tap "+", so "+" had better be visible. These icons
+  // carry a viewBox but no width/height; without an explicit CSS size Chromium
+  // stretches them to fill the 44px button while Safari collapses them to zero,
+  // rendering an invisible-but-tappable control. Assert a sane rendered size.
+  const plusBox = await page.locator('.header-btn svg').first().boundingBox()
+  check(
+    'Header "+" icon renders at a sane size',
+    plusBox !== null && plusBox.width >= 16 && plusBox.width <= 28 && plusBox.height >= 16 && plusBox.height <= 28,
+    JSON.stringify(plusBox),
+  )
+
   const virgin = await readIDB(page, async ({ getAll, get }) => ({
     exercises: (await getAll('exercises')).length,
     workouts: (await getAll('workouts')).length,
@@ -370,6 +381,17 @@ try {
   section('Author a program through the UI')
   await gotoTab(page, 'Home')
   await newWorkout(page, 'Push')
+
+  // A slotless workout must not dead-end. It used to render a DISABLED
+  // "Add slots first" button, which named the fix but offered no way to do it.
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.locator('.header-title', { hasText: 'Slots' }).waitFor()
+  const emptyCta = page.getByRole('button', { name: 'Add slots' })
+  check('Slotless workout offers an enabled way forward', await emptyCta.isEnabled())
+  await emptyCta.click()
+  await page.locator('.header-title', { hasText: 'Edit workout' }).waitFor()
+  check('"Add slots" reaches the editor', page.url().includes('/edit'))
+
   await addSlot(page, 'Chest')
   await addSlot(page, 'Shoulders')
   await addSlot(page, 'Triceps')
@@ -384,6 +406,38 @@ try {
   await page.locator('.header-title', { hasText: 'Slots' }).waitFor()
   check('Authored workout on Home', await visible(page.getByText('Push', { exact: true })))
   check('Slot count shown', await visible(page.getByText('3 slots', { exact: false })))
+
+  // ================================================================ mid-session edits
+  section('Editing a workout mid-session')
+  await startWorkout(page, 'Push')
+  const sessionUrl = page.url()
+
+  // add a slot without leaving the workout
+  await page.getByPlaceholder('Add a slot, e.g. Calves').fill('Calves')
+  await page.locator('.main').getByRole('button', { name: 'Add', exact: true }).click()
+  check('Slot added mid-session', await visible(page.getByText('Calves', { exact: false })))
+
+  // and the full editor is reachable, returning to the same live session
+  await page.getByRole('button', { name: 'Edit' }).click()
+  await page.locator('.header-title', { hasText: 'Edit workout' }).waitFor()
+  check('Editor reachable from a live session', page.url().includes('/edit'))
+  await page.getByRole('button', { name: 'Back' }).click()
+  await page.getByRole('button', { name: 'Finish workout' }).waitFor()
+  check('Back returns to the same session', page.url() === sessionUrl, page.url())
+
+  const persistedSlot = await readIDB(page, async ({ getAll }) => {
+    const w = (await getAll('workouts')).find((x) => x.name === 'Push')
+    return w?.slots.map((s) => s.name) ?? []
+  })
+  check(
+    'Mid-session slot joins the workout permanently',
+    persistedSlot.includes('Calves'),
+    JSON.stringify(persistedSlot),
+  )
+
+  await page.getByRole('button', { name: 'Discard this workout' }).click()
+  await page.getByRole('button', { name: 'Discard', exact: true }).last().click()
+  await page.locator('.tab', { hasText: 'Settings' }).waitFor({ timeout: 10_000 })
 
   // ================================================================ phase 3
   section('Create an exercise mid-workout (the new flow)')
@@ -494,7 +548,7 @@ try {
   )
 
   await page.getByRole('button', { name: 'Back' }).click()
-  await page.getByRole('button', { name: 'Discard' }).click()
+  await page.getByRole('button', { name: 'Discard this workout' }).click()
   await page.getByRole('button', { name: 'Discard', exact: true }).last().click()
   await page.locator('.tab', { hasText: 'Settings' }).waitFor({ timeout: 10_000 })
 
